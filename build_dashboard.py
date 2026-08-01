@@ -17,13 +17,13 @@ HTML = r"""<!DOCTYPE html>
   :root{--bg:#f4f5f3;--surface-1:#fff;--surface-2:#f6f7f4;--line:#e6e7e3;
     --text-primary:#14140f;--text-secondary:#57564f;--text-muted:#8a897f;
     --series-1:#2a78d6;--series-1-soft:#cde2fb;--series-2:#eb6834;--series-2-soft:#fbe0d3;
-    --good:#0ca30c;--critical:#d03b3b;--serious:#ec835a;--neutral:#9a998f;--info:#5f6b7a;--navy:#1f3864;
+    --good:#0ca30c;--critical:#d03b3b;--serious:#ec835a;--neutral:#9a998f;--info:#5f6b7a;--grow:#6f4fc0;--navy:#1f3864;
     --o-demanda:#2a78d6;--o-conv2:#7a5cd0;--o-aprov:#0f9b6c;--o-fin:#9a998f;--o-ticket:#d2559a;
     --shadow:0 1px 2px rgba(0,0,0,.05),0 6px 20px rgba(20,20,15,.05);--radius:14px;}
   :root[data-theme="dark"]{--bg:#121211;--surface-1:#1c1c1a;--surface-2:#232320;--line:#33332e;
     --text-primary:#f4f4ef;--text-secondary:#c3c2b7;--text-muted:#8f8e83;
     --series-1:#3987e5;--series-1-soft:#1c3a5e;--series-2:#d95926;--series-2-soft:#4a2a1c;
-    --good:#2bb52b;--critical:#e05a5a;--serious:#f0956b;--neutral:#7d7c72;--info:#9aa4b3;--navy:#9bb4e0;
+    --good:#2bb52b;--critical:#e05a5a;--serious:#f0956b;--neutral:#7d7c72;--info:#9aa4b3;--grow:#a596ec;--navy:#9bb4e0;
     --o-demanda:#5a9bea;--o-conv2:#a596ec;--o-aprov:#3bbd8c;--o-fin:#8f8e83;--o-ticket:#e07ab0;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 22px rgba(0,0,0,.35);}
   *{box-sizing:border-box}html,body{margin:0}
@@ -70,6 +70,7 @@ HTML = r"""<!DOCTYPE html>
   .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;letter-spacing:.2px}
   .b-ALTA{background:var(--critical)}.b-MÉDIA{background:var(--serious)}.b-Positivo{background:var(--good)}.b-Monitorar{background:var(--neutral)}
   .b-Informativo{background:transparent;color:var(--info);border:1px solid var(--info)}
+  .b-dorm{background:var(--grow);color:#fff}.b-sub{background:transparent;color:var(--grow);border:1px solid var(--grow)}
   .chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11.5px;font-weight:650;margin:0 4px 4px 0;color:#fff}
   .det{font-size:11.5px;color:var(--text-secondary);margin-top:2px;line-height:1.5}
   .det .dline{display:flex;gap:6px;align-items:baseline}
@@ -309,7 +310,32 @@ function render(key){
       <th class="num">${prod.stage2n}</th><th class="num">Conv.</th><th class="num">Aprov.</th><th class="num">Conv.</th><th class="num">Final.</th><th class="num">Conv.</th>
       <th class="num">Ticket (Tkm prest. final.)</th><th class="num">GMV vend.</th><th class="num">Receita</th></tr></thead><tbody>${frows}</tbody></table></div></details></div>`;
 
-  document.getElementById("panel").innerHTML=kpis+visao+charts+onde+funil;
+  // ---- Ativação & engajamento: contas com carteira mas produzindo pouco ----
+  const TP=0.05;
+  let ativar=res.clients.filter(c=>c.pri==="Monitorar").map(c=>{const cl=c.raw;
+    const cartB=cl.cart[iB]||0, chB=cl.ch[iB]||0, rbB=cl.rb[iB]||0, pen=cartB?chB/cartB:0;
+    const rec=[]; for(let i=Math.max(0,iB-2);i<=iB;i++) rec.push(cl.ch[i]||0);
+    const recentSum=rec.reduce((a,b)=>a+b,0);
+    return {cliente:cl.cliente,cartB,chB,rbB,pen,rec,recentSum,gap:cartB*TP-chB,alvo:Math.round(cartB*TP)};
+  }).filter(c=>c.cartB>=200 && c.pen<0.03 && c.gap>3).sort((a,b)=>b.gap-a.gap).slice(0,20);
+  const somaCart=ativar.reduce((a,c)=>a+c.cartB,0), somaGap=ativar.reduce((a,c)=>a+c.gap,0);
+  const nDorm=ativar.filter(c=>c.recentSum===0).length;
+  const arows=ativar.map(c=>{
+    const dorm=c.recentSum===0;
+    const badge=dorm?'<span class="badge b-dorm">Dormente</span>':'<span class="badge b-sub">Sub-penetrado</span>';
+    const acao=dorm?"• Conta parada — reativar: entender por que não abre chamados, reengajar o gestor e fazer campanha de abertura."
+                   :"• Usa pouco pro tamanho da carteira — ampliar: apresentar mais serviços, treinar a equipe e definir meta de abertura.";
+    return `<tr><td class="cli">${c.cliente}</td><td>${badge}</td><td class="num">${fmt(c.cartB)}</td>
+      <td class="num"><span class="prog">${c.rec.map(fmt).join(" → ")}</span></td>
+      <td class="num">${(c.pen*100).toLocaleString("pt-BR",{maximumFractionDigits:1})}%</td>
+      <td class="num">${fmt(c.alvo)}/mês <span class="parc">(+${fmt(Math.round(c.gap))})</span></td>
+      <td class="num">${brl(c.rbB)}</td><td class="rec">${acao}</td></tr>`;}).join("");
+  const ativarCard=`<div class="card"><h2>Ativação &amp; engajamento — contas sub-utilizadas</h2>
+    <p class="hint">A outra ponta: não quem caiu, mas quem <b>tem carteira e produz pouco</b> — fora da lista de queda acima, contas para engajar e gerar receita nova. Penetração = chamados/carteira; "Potencial" = abertura estimada a 5% de penetração (nível dos clientes saudáveis). Ordenado pelo maior potencial não capturado.</p>
+    ${ativar.length?`<p class="hint" style="margin-bottom:12px"><b>${ativar.length}</b> contas (${nDorm} dormentes) · carteira somada <b>${fmt(somaCart)}</b> imóveis · potencial de <b>~${fmt(Math.round(somaGap))} chamados/mês</b> não capturados.</p>
+    <div class="scroll"><table><thead><tr><th>Cliente</th><th>Situação</th><th class="num">Carteira</th><th class="num">Chamados (recentes)</th><th class="num">Penetração</th><th class="num">Potencial (~5%)</th><th class="num">Receita ${B}</th><th>Ação</th></tr></thead><tbody>${arows}</tbody></table></div>`
+    :`<p class="hint">Nenhuma conta sub-utilizada relevante neste recorte.</p>`}</div>`;
+  document.getElementById("panel").innerHTML=kpis+visao+charts+onde+ativarCard+funil;
   document.getElementById("chint").textContent=`Comparando ${MLAB[iA]} → ${MLAB[iB]} · ${idxs.length} ${idxs.length>1?'meses':'mês'} na janela.`;
   wireHover();
 }
