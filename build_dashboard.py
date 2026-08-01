@@ -17,13 +17,13 @@ HTML = r"""<!DOCTYPE html>
   :root{--bg:#f4f5f3;--surface-1:#fff;--surface-2:#f6f7f4;--line:#e6e7e3;
     --text-primary:#14140f;--text-secondary:#57564f;--text-muted:#8a897f;
     --series-1:#2a78d6;--series-1-soft:#cde2fb;--series-2:#eb6834;--series-2-soft:#fbe0d3;
-    --good:#0ca30c;--critical:#d03b3b;--serious:#ec835a;--neutral:#9a998f;--navy:#1f3864;
+    --good:#0ca30c;--critical:#d03b3b;--serious:#ec835a;--neutral:#9a998f;--info:#5f6b7a;--navy:#1f3864;
     --o-demanda:#2a78d6;--o-conv2:#7a5cd0;--o-aprov:#0f9b6c;--o-fin:#9a998f;--o-ticket:#d2559a;
     --shadow:0 1px 2px rgba(0,0,0,.05),0 6px 20px rgba(20,20,15,.05);--radius:14px;}
   :root[data-theme="dark"]{--bg:#121211;--surface-1:#1c1c1a;--surface-2:#232320;--line:#33332e;
     --text-primary:#f4f4ef;--text-secondary:#c3c2b7;--text-muted:#8f8e83;
     --series-1:#3987e5;--series-1-soft:#1c3a5e;--series-2:#d95926;--series-2-soft:#4a2a1c;
-    --good:#2bb52b;--critical:#e05a5a;--serious:#f0956b;--neutral:#7d7c72;--navy:#9bb4e0;
+    --good:#2bb52b;--critical:#e05a5a;--serious:#f0956b;--neutral:#7d7c72;--info:#9aa4b3;--navy:#9bb4e0;
     --o-demanda:#5a9bea;--o-conv2:#a596ec;--o-aprov:#3bbd8c;--o-fin:#8f8e83;--o-ticket:#e07ab0;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 22px rgba(0,0,0,.35);}
   *{box-sizing:border-box}html,body{margin:0}
@@ -69,6 +69,7 @@ HTML = r"""<!DOCTYPE html>
   .sentence{font-size:13.5px;margin:12px 0 2px;padding:10px 12px;background:var(--surface-2);border-radius:9px;line-height:1.7}
   .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;letter-spacing:.2px}
   .b-ALTA{background:var(--critical)}.b-MÉDIA{background:var(--serious)}.b-Positivo{background:var(--good)}.b-Monitorar{background:var(--neutral)}
+  .b-Informativo{background:transparent;color:var(--info);border:1px solid var(--info)}
   .chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11.5px;font-weight:650;margin:0 4px 4px 0;color:#fff}
   .det{font-size:11.5px;color:var(--text-secondary);margin-top:2px;line-height:1.5}
   .det .dline{display:flex;gap:6px;align-items:baseline}
@@ -189,16 +190,16 @@ function analyzeProduct(prod,iA,iB){
     let scale=0; for(let i=iA;i<=iB;i++) scale=Math.max(scale,cl.rb[i]||0);
     const peakAll=Math.max(...cl.rb,1), has=offenders.length>0;
     const growing=!has&&rbB>=rbA&&rbB>=0.85*peakAll&&rbB>=800;
-    let pri; if(no_action) pri=scale>=800?"MÉDIA":"Monitorar";
+    let pri; if(no_action) pri=scale>=800?"Informativo":"Monitorar";
     else if(has&&scale>=4000) pri="ALTA"; else if(has&&scale>=800) pri="MÉDIA";
     else if(growing) pri="Positivo"; else pri="Monitorar";
     return {cliente:cl.cliente,pri,no_action,offenders,offenders_lbl:offenders.map(o=>o.label),recs,
       rbA,rbB,chA,chB,var_rb,var_ch,scale,rbSeries:cl.rb,raw:cl,
       ch_win:idxs.map(i=>cl.ch[i]||0), imp_win:idxs.map(i=>{const c=cl.cart[i]||0;return c?(cl.ch[i]||0)/c*100:0;})};
   });
-  const ord={ALTA:0,"MÉDIA":1,Positivo:2,Monitorar:3};
+  const ord={ALTA:0,"MÉDIA":1,Informativo:2,Positivo:3,Monitorar:4};
   clients.sort((a,b)=>ord[a.pri]-ord[b.pri]||b.rbB-a.rbB);
-  const pri_counts={ALTA:0,"MÉDIA":0,Positivo:0,Monitorar:0}; clients.forEach(c=>pri_counts[c.pri]++);
+  const pri_counts={ALTA:0,"MÉDIA":0,Informativo:0,Positivo:0,Monitorar:0}; clients.forEach(c=>pri_counts[c.pri]++);
   const receita=[],chamados=[],ativas=[];
   for(let i=0;i<NM;i++){let r=0,ch=0,a=0;prod.clients.forEach(cl=>{r+=cl.rb[i]||0;ch+=cl.ch[i]||0;if((cl.ch[i]||0)||(cl.rb[i]||0))a++;});receita.push(r);chamados.push(ch);ativas.push(a);}
   const movers=clients.filter(c=>Math.max(c.rbA,c.rbB)>=300&&c.var_rb!==null);
@@ -266,24 +267,24 @@ function render(key){
     <div class="card"><h2>Receita bruta por mês</h2><p class="hint">${L[0]}–${L[NM-1]} · destaque nos meses comparados (${A}, ${B}).</p><div id="lc-rev">${lineChart(L,rev,{money:true,hi:[iA,iB]})}</div></div>
     <div class="card"><h2>Chamados por mês <span style="color:var(--text-muted);font-weight:500">· engajamento</span></h2><p class="hint">Abertura de chamados — principal sinal de engajamento.</p><div id="lc-ch">${lineChart(L,ch,{money:false,color:"var(--series-2)",soft:"var(--series-2-soft)",hi:[iA,iB]})}</div></div></div>`;
 
-  const act=res.clients.filter(c=>c.pri==="ALTA"||c.pri==="MÉDIA");
+  const act=res.clients.filter(c=>c.pri==="ALTA"||c.pri==="MÉDIA"||c.pri==="Informativo");
   const legend=`<div class="prio-legend">
     <span><i class="dot" style="background:var(--critical)"></i>ALTA ${pcnt.ALTA}</span><span><i class="dot" style="background:var(--serious)"></i>MÉDIA ${pcnt["MÉDIA"]}</span>
-    <span><i class="dot" style="background:var(--good)"></i>Positivo ${pcnt.Positivo}</span><span><i class="dot" style="background:var(--neutral)"></i>Monitorar ${pcnt.Monitorar}</span></div>`;
+    <span><i class="dot" style="background:var(--info)"></i>Informativo ${pcnt.Informativo}</span><span><i class="dot" style="background:var(--good)"></i>Positivo ${pcnt.Positivo}</span><span><i class="dot" style="background:var(--neutral)"></i>Monitorar ${pcnt.Monitorar}</span></div>`;
   const winlab=idxs.map(i=>L[i]).join("→");
   const rows=act.map(c=>{
     const chips=c.offenders.map(o=>`<span class="chip" style="background:${OFF_COLOR[o.label]||'var(--neutral)'}">${o.label}</span>`).join("")||"—";
     const det=c.offenders.map(o=>`<div class="dline"><i class="dot" style="background:${OFF_COLOR[o.label]||'var(--neutral)'}"></i><span>${o.detalhe}</span></div>`).join("");
     const dR=c.rbB-c.rbA;
     return `<tr>
-      <td class="cli">${c.cliente}${c.no_action?' <span class="parc" style="font-weight:500">(informativo)</span>':''}</td>
+      <td class="cli">${c.cliente}</td>
       <td><span class="badge b-${c.pri}">${c.pri}</span></td>
       <td>${chips}<div class="det">${det}</div></td>
       <td class="num"><span class="prog">${brl(c.rbA)} → ${brl(c.rbB)}</span><br><span class="varbig ${cls(dR)}">${arrow(dR)} ${pct(c.var_rb)}</span> ${spark(c.rbSeries,c.var_rb)}</td>
       <td class="num"><span class="prog">${c.ch_win.map(fmt).join(" → ")}</span><br><span class="varbig ${cls(c.var_ch)}">${arrow(c.var_ch)} ${pct(c.var_ch)}</span><br><span class="parc" style="font-size:11px">pen. ${c.imp_win.map(x=>x.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%").join(" → ")}</span></td>
       <td class="${c.no_action?'rec muted':'rec'}">${c.recs.join("<br>")}</td></tr>`;}).join("");
-  const onde=`<div class="card"><h2>Onde atuar — prioridade ALTA e MÉDIA</h2>
-    <p class="hint">Ofensores da receita por cliente na comparação ${A}→${B} (detalhado mês a mês: ${winlab}). "O que está caindo" pode ter vários indicadores.</p>${legend}
+  const onde=`<div class="card"><h2>Onde atuar</h2>
+    <p class="hint">Ofensores da receita por cliente na comparação ${A}→${B} (detalhado mês a mês: ${winlab}). "O que está caindo" pode ter vários indicadores. <b>Informativo</b> = queda por defasagem de finalização, sem ação.</p>${legend}
     <div class="scroll"><table><thead><tr><th>Cliente</th><th>Prior.</th><th>O que está caindo · detalhamento</th><th class="num">Receita ${A}→${B}</th><th class="num">Chamados (${winlab}) · engaj.</th><th>Recomendação</th></tr></thead>
       <tbody>${rows||`<tr><td colspan="6" class="parc">Nenhum cliente em queda relevante nesta comparação.</td></tr>`}</tbody></table></div></div>`;
 
