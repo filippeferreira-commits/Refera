@@ -121,9 +121,9 @@ function hideTip(){tip.style.opacity=0;}
 document.getElementById("subtitle").textContent="Manutenção e Desocupação · referência "+DATA.ref;
 const anyd=DATA.manutencao;
 document.getElementById("parcnote").innerHTML=
-  "<b>"+anyd.partial_label+" é parcial</b> — as finalizações do mês ainda entram no mês seguinte (defasagem de execução), então os totais de "+anyd.partial_label+
-  " podem subir. A análise de <i>onde atuar</i> e as variações comparam os <b>meses fechados</b> ("+anyd.win_labels.join("→")+"). "+
-  "Conv. finalizado caindo só é destacado quando é o único motivo da queda — e, nesse caso, é informativo (defasagem), sem ação.";
+  "Mês de referência: <b>"+anyd.ref_label+"</b> (fechado). Variações comparam "+anyd.prev_label+"→"+anyd.ref_label+
+  " e os ofensores usam a janela de 3 meses ("+anyd.win_labels.join("→")+"). "+
+  "Conv. finalizado caindo só é destacado quando é o único motivo da queda e a receita caiu de fato — e, nesse caso, é informativo (defasagem de execução), sem ação.";
 document.getElementById("foot").innerHTML=
   "Funil: Carteira → Chamados <span class='parc'>(Impacto = penetração = chamados/carteira)</span> → "+
   "Revisados/Realizados (orçamento) → Aprovados (venda) → Finalizados (execução) → Ticket médio (receita/finalizado) → Receita bruta.<br>"+
@@ -181,11 +181,11 @@ function render(key){
   const d=DATA[key],L=d.labels,rev=d.receita,ch=d.chamados,n=L.length;
   const revV=n>=2&&rev[n-2]?Math.round((rev[n-1]-rev[n-2])/rev[n-2]*1000)/10:null;
   const chV=n>=2&&ch[n-2]?Math.round((ch[n-1]-ch[n-2])/ch[n-2]*1000)/10:null;
-  const pcnt=d.pri_counts,ov=d.overview,plab=d.partial_label,prevlab=L[n-2];
+  const pcnt=d.pri_counts,ov=d.overview,rlab=d.ref_label,prevlab=L[n-2];
   const kpis=`<div class="kpis">
-    ${kpi("Receita bruta — "+plab+" (parcial)",brl(rev[n-1]),revV,prevlab)}
-    ${kpi("Chamados — "+plab+" · engajamento",fmt(ch[n-1]),chV,prevlab)}
-    ${kpi("Imobiliárias ativas — "+plab,fmt(d.ativas[n-1]),null)}
+    ${kpi("Receita bruta — "+rlab,brl(rev[n-1]),revV,prevlab)}
+    ${kpi("Chamados — "+rlab+" · engajamento",fmt(ch[n-1]),chV,prevlab)}
+    ${kpi("Imobiliárias ativas — "+rlab,fmt(d.ativas[n-1]),null)}
     ${kpi("Clientes prioridade ALTA",pcnt.ALTA,null)}</div>`;
 
   // Visão geral
@@ -196,7 +196,7 @@ function render(key){
   const vr=ov.var_receita,vc=ov.var_chamados;
   const sentence=`<div class="sentence"><b>Receita</b> ${d.prev_label}→${d.ref_label}: ${brl(vr.a)} → ${brl(vr.b)} <span class="${cls(vr.pct)}">${arrow(vr.pct)} ${pct(vr.pct)}</span>
      &nbsp;·&nbsp; <b>Chamados</b> (engajamento) ${d.prev_label}→${d.ref_label}: ${fmt(vc.a)} → ${fmt(vc.b)} <span class="${cls(vc.pct)}">${arrow(vc.pct)} ${pct(vc.pct)}</span></div>`;
-  const visao=`<div class="card"><h2>Visão geral da carteira</h2><p class="hint">Soma de todos os clientes por mês. ${plab}* é parcial. Variações comparam os dois últimos meses fechados.</p>
+  const visao=`<div class="card"><h2>Visão geral da carteira</h2><p class="hint">Soma de todos os clientes por mês. Variações comparam os dois últimos meses (${d.prev_label}→${d.ref_label}).</p>
     <table class="metric-tbl"><thead><tr><th>Métrica</th>${head}</tr></thead>
       <tbody><tr><td>Receita bruta (R$)</td>${rrow}</tr><tr><td>Chamados (total)</td>${crow}</tr></tbody></table>
     ${sentence}
@@ -204,8 +204,8 @@ function render(key){
 
   // charts
   const charts=`<div class="grid2">
-    <div class="card"><h2>Receita bruta por mês</h2><p class="hint">${L[0]}–${plab} · ${plab}* parcial.</p><div id="lc-rev">${lineChart(L,rev,{money:true,partial:true})}</div></div>
-    <div class="card"><h2>Chamados por mês <span style="color:var(--text-muted);font-weight:500">· engajamento</span></h2><p class="hint">Abertura de chamados — principal sinal de engajamento.</p><div id="lc-ch">${lineChart(L,ch,{money:false,partial:true,color:"var(--series-2)",soft:"var(--series-2-soft)"})}</div></div></div>`;
+    <div class="card"><h2>Receita bruta por mês</h2><p class="hint">${L[0]}–${d.ref_label}.</p><div id="lc-rev">${lineChart(L,rev,{money:true})}</div></div>
+    <div class="card"><h2>Chamados por mês <span style="color:var(--text-muted);font-weight:500">· engajamento</span></h2><p class="hint">Abertura de chamados — principal sinal de engajamento.</p><div id="lc-ch">${lineChart(L,ch,{money:false,color:"var(--series-2)",soft:"var(--series-2-soft)"})}</div></div></div>`;
 
   // Onde atuar
   const act=d.clients.filter(c=>c.pri==="ALTA"||c.pri==="MÉDIA");
@@ -239,7 +239,7 @@ function render(key){
       <td class="num">${fmt(f.apr)}</td><td class="num">${f.capr}%</td><td class="num">${fmt(f.fin)}</td><td class="num">${f.cfin}%</td>
       <td class="num">${brl(f.tkf)}</td><td class="num">${brl(f.ticket)}</td><td class="num" style="font-weight:650">${brl(f.rb)}</td></tr>`).join("")).join("");
   const funil=`<div class="card"><details><summary>Funil por cliente — números-chave por mês (${fc.length} clientes) ▾</summary>
-    <p class="hint" style="margin-top:8px">Últimos 4 meses por cliente. ${plab}* parcial. Conv. finalizado pode passar de 100% (defasagem). Ticket médio = receita/finalizados.</p>
+    <p class="hint" style="margin-top:8px">Últimos 4 meses por cliente. Conv. finalizado pode passar de 100% (defasagem de execução). Ticket médio = receita/finalizados.</p>
     <div class="scroll"><table><thead><tr><th>Cliente</th><th>Mês</th><th class="num">Carteira</th><th class="num">Chamados</th><th class="num">Impacto</th>
       <th class="num">${d.stage2n}</th><th class="num">Conv.</th><th class="num">Aprov.</th><th class="num">Conv.</th><th class="num">Final.</th><th class="num">Conv.</th>
       <th class="num">Tkm prest.</th><th class="num">Ticket</th><th class="num">Receita</th></tr></thead><tbody>${frows}</tbody></table></div></details></div>`;

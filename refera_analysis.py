@@ -105,14 +105,11 @@ def analyze(path, ry, rm):
         months.pop()
     labels=[MESNOME[m] for (_,m) in months]
     n=len(months)
-    # último mês ainda assentando -> parcial; queda é analisada sobre os meses FECHADOS
-    partial = months[-1]
-    settled = months[:-1] if n>=2 else months[:]
-    win = settled[-3:]
+    # o último mês do arquivo é o mês FECHADO de referência (ex.: julho no export de julho).
+    win = months[-3:]
     wlab=[MESNOME[m] for (_,m) in win]
-    prev = settled[-2] if len(settled)>=2 else settled[0]
-    refm = settled[-1]
-    partial_label = MESNOME[partial[1]]
+    prev = months[-2] if n>=2 else months[-1]
+    refm = months[-1]
 
     def ser(imo,k,ms):
         return [d[imo].get(m,{}).get(k,0) for m in ms]
@@ -128,7 +125,7 @@ def analyze(path, ry, rm):
     for imo in d:
         rb_all=ser(imo,"rb",months); ch_all=ser(imo,"ch",months)
         if sum(rb_all)==0 and sum(ch_all)==0: continue
-        rb_settled=ser(imo,"rb",settled)
+        
         w0,w2=win[0],win[-1]; c0,c2=conv(imo,w0),conv(imo,w2)
         factors=[("Demanda","ch"),(stage2,"crev"),("Conv. aprovado","capr"),
                  ("Conv. finalizado","cfin"),("Ticket médio","ticket")]
@@ -183,7 +180,7 @@ def analyze(path, ry, rm):
         scale=max(ser(imo,"rb",win)) if win else 0
         has=len(offenders)>0
         sole_cfin = has and len(offenders)==1 and offenders[0]['label']=="Conv. finalizado"
-        growing=(not has) and rb_ref>=rb_prev and rb_ref>=0.85*max(rb_settled+[1]) and rb_ref>=800
+        growing=(not has) and rb_ref>=rb_prev and rb_ref>=0.85*max(rb_all+[1]) and rb_ref>=800
         if sole_cfin:                       # informativo (sem ação) -> nunca ALTA
             pri="MÉDIA" if scale>=800 else "Monitorar"
         elif has and scale>=4000: pri="ALTA"
@@ -195,7 +192,7 @@ def analyze(path, ry, rm):
         funil=[]
         for m in fmonths:
             v=conv(imo,m)
-            funil.append(dict(mes=MESNOME[m[1]], parcial=(m==partial), cart=round(v["cart"]),
+            funil.append(dict(mes=MESNOME[m[1]], parcial=False, cart=round(v["cart"]),
                 ch=round(v["ch"]), imp=round(v["imp"]*100,1), rev=round(v["rev"]),
                 crev=round(v["crev"]*100), apr=round(v["apr"]), capr=round(v["capr"]*100),
                 fin=round(v["fin"]), cfin=round(v["cfin"]*100), tkf=round(v["tkf"]),
@@ -232,7 +229,7 @@ def analyze(path, ry, rm):
     ov_months=months[-4:]
     overview=dict(
         metric_months=[MESNOME[m[1]] for m in ov_months],
-        metric_parcial=[(m==partial) for m in ov_months],
+        metric_parcial=[False for m in ov_months],
         receita_row=[round(sum(d[i].get(m,{}).get("rb",0) for i in d)) for m in ov_months],
         chamados_row=[round(sum(d[i].get(m,{}).get("ch",0) for i in d)) for m in ov_months],
         var_receita=dict(a=receita[iprev], b=receita[iref],
@@ -243,7 +240,7 @@ def analyze(path, ry, rm):
     )
     return dict(labels=labels, receita=receita, chamados=chamados, ativas=ativas,
         win_labels=wlab, ref_label=MESNOME[refm[1]], prev_label=MESNOME[prev[1]],
-        partial_label=partial_label, stage2=stage2, stage2n=stage2n,
+        partial_label="", stage2=stage2, stage2n=stage2n,
         pri_counts=pri_counts, overview=overview, clients=clients)
 
 def main():
@@ -256,6 +253,6 @@ def main():
     json.dump(res, open(out,"w"), ensure_ascii=False, indent=1)
     print("SAVED",out)
     for p in ("manutencao","desocupacao"):
-        r=res[p]; print(p,"ref(fechado)=",r["ref_label"],"parcial=",r["partial_label"],"win=",r["win_labels"],r["pri_counts"])
+        r=res[p]; print(p,"ref(fechado)=",r["ref_label"],"win=",r["win_labels"],r["pri_counts"])
 
 if __name__=="__main__": main()
