@@ -122,7 +122,7 @@ const REC={
  "Conv. revisado":"• Chamados entram mas não viram orçamento. Gargalo na revisão/orçamentação — SLA de orçamento e cobertura de prestadores.",
  "Conv. realizado":"• Chamados entram mas não viram orçamento. Gargalo na revisão/orçamentação — SLA de orçamento e cobertura de prestadores.",
  "Conv. aprovado":"• Orçamentos feitos mas não vendem. Revisar preço, proposta e follow-up comercial.",
- "Conv. finalizado":"• Sem ação: a queda veio de finalizações que escorregaram para o mês seguinte (defasagem de execução). Tende a normalizar — só para você saber o porquê.",
+ "Conv. finalizado":"• Sem ação (defasagem): as finalizações escorregaram para o mês seguinte. A receita e o ticket finalizado menores são consequência disso e tendem a normalizar — só para você saber o porquê da queda.",
  "Ticket médio (final.)":"• Volume ok, mas a receita por serviço finalizado caiu. Revisar mix de serviços e precificação.",
 };
 const fmt=n=>n==null?"—":Math.round(n).toLocaleString("pt-BR");
@@ -163,9 +163,22 @@ function analyzeProduct(prod,iA,iB){
       if(l!==null&&l<=LN_DROP) drops.push([label,key,l]);
     }
     if(dem_lc!==null&&dem_lc<=LN_COLL&&drops.some(t=>t[1]==="ch")) drops=drops.filter(t=>t[1]==="ch");
-    if(drops.some(t=>t[1]!=="cfin")||rev_lc===null||rev_lc>=0) drops=drops.filter(t=>t[1]!=="cfin");
+    let no_action=false;
+    const upstream=drops.filter(t=>["ch","crev","capr"].includes(t[1]));
+    const cfin_in=drops.some(t=>t[1]==="cfin");
+    if(upstream.length===0){
+      if(cfin_in && rev_lc!==null && rev_lc<0){
+        // nada caiu a montante (demanda/orçamento/venda ok) e a finalização escorregou:
+        // DEFASAGEM -> informativo. O ticket finalizado menor é consequência da baixa finalização.
+        drops=drops.filter(t=>t[1]==="cfin"); no_action=true;
+      } else {
+        drops=drops.filter(t=>t[1]!=="cfin"); // finalização ok: mantém o resto (ex.: ticket que caiu de fato)
+      }
+    } else {
+      drops=drops.filter(t=>t[1]!=="cfin");    // problema real a montante: conv. finalizado é ruído
+    }
     if(!drops.length&&rev_lc!==null&&rev_lc<=LN_DROP){
-      let cand=factors.map(([lb,k])=>[lb,k,lc(fval(c0,k),fval(c2,k))]).filter(t=>t[2]!==null);
+      let cand=factors.filter(([lb,k])=>k!=="cfin").map(([lb,k])=>[lb,k,lc(fval(c0,k),fval(c2,k))]).filter(t=>t[2]!==null&&t[2]<0);
       if(cand.length){cand.sort((a,b)=>a[2]-b[2]);drops=[cand[0]];}
     }
     drops.sort((a,b)=>a[2]-b[2]);
@@ -175,12 +188,11 @@ function analyzeProduct(prod,iA,iB){
     const var_rb=rbA?(rbB-rbA)/rbA*100:null, var_ch=chA?(chB-chA)/chA*100:null;
     let scale=0; for(let i=iA;i<=iB;i++) scale=Math.max(scale,cl.rb[i]||0);
     const peakAll=Math.max(...cl.rb,1), has=offenders.length>0;
-    const sole_cfin=has&&offenders.length===1&&offenders[0].label==="Conv. finalizado";
     const growing=!has&&rbB>=rbA&&rbB>=0.85*peakAll&&rbB>=800;
-    let pri; if(sole_cfin) pri=scale>=800?"MÉDIA":"Monitorar";
+    let pri; if(no_action) pri=scale>=800?"MÉDIA":"Monitorar";
     else if(has&&scale>=4000) pri="ALTA"; else if(has&&scale>=800) pri="MÉDIA";
     else if(growing) pri="Positivo"; else pri="Monitorar";
-    return {cliente:cl.cliente,pri,no_action:sole_cfin,offenders,offenders_lbl:offenders.map(o=>o.label),recs,
+    return {cliente:cl.cliente,pri,no_action,offenders,offenders_lbl:offenders.map(o=>o.label),recs,
       rbA,rbB,chA,chB,var_rb,var_ch,scale,rbSeries:cl.rb,raw:cl,
       ch_win:idxs.map(i=>cl.ch[i]||0), imp_win:idxs.map(i=>{const c=cl.cart[i]||0;return c?(cl.ch[i]||0)/c*100:0;})};
   });
