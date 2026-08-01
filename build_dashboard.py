@@ -114,16 +114,16 @@ HTML = r"""<!DOCTYPE html>
 const DATA=__DATA_JSON__;
 const PRODs=[["manutencao","Manutenção"],["desocupacao","Desocupação"]];
 const MONTHS=DATA.manutencao.labels_short, MLAB=DATA.manutencao.labels, NM=MONTHS.length;
-const LN_DROP=Math.log(0.86), LN_COLL=Math.log(0.45);
+const LN_DROP=Math.log(0.90), LN_COLL=Math.log(0.45); // ofensor: etapa caiu >= ~10%
 const PRI_COLOR={ALTA:"var(--critical)","MÉDIA":"var(--serious)",Positivo:"var(--good)",Monitorar:"var(--neutral)"};
-const OFF_COLOR={"Demanda":"var(--o-demanda)","Conv. revisado":"var(--o-conv2)","Conv. realizado":"var(--o-conv2)","Conv. aprovado":"var(--o-aprov)","Conv. finalizado":"var(--o-fin)","Ticket médio":"var(--o-ticket)"};
+const OFF_COLOR={"Demanda":"var(--o-demanda)","Conv. revisado":"var(--o-conv2)","Conv. realizado":"var(--o-conv2)","Conv. aprovado":"var(--o-aprov)","Conv. finalizado":"var(--o-fin)","Ticket médio (final.)":"var(--o-ticket)"};
 const REC={
  "Demanda":"• Demanda em queda: CS deve entender a menor abertura de chamados (satisfação, engajamento do gestor, concorrência).",
  "Conv. revisado":"• Chamados entram mas não viram orçamento. Gargalo na revisão/orçamentação — SLA de orçamento e cobertura de prestadores.",
  "Conv. realizado":"• Chamados entram mas não viram orçamento. Gargalo na revisão/orçamentação — SLA de orçamento e cobertura de prestadores.",
  "Conv. aprovado":"• Orçamentos feitos mas não vendem. Revisar preço, proposta e follow-up comercial.",
  "Conv. finalizado":"• Sem ação: a queda veio de finalizações que escorregaram para o mês seguinte (defasagem de execução). Tende a normalizar — só para você saber o porquê.",
- "Ticket médio":"• Volume ok, receita por serviço caiu. Revisar mix de serviços e precificação.",
+ "Ticket médio (final.)":"• Volume ok, mas a receita por serviço finalizado caiu. Revisar mix de serviços e precificação.",
 };
 const fmt=n=>n==null?"—":Math.round(n).toLocaleString("pt-BR");
 const brl=n=>"R$ "+(n==null?"—":Math.round(n).toLocaleString("pt-BR"));
@@ -137,19 +137,19 @@ function hideTip(){tip.style.opacity=0;}
 let selA=NM>=2?NM-2:0, selB=NM-1;
 
 function conv(cl,i){const ch=cl.ch[i]||0,rev=cl.rev[i]||0,apr=cl.apr[i]||0,fin=cl.fin[i]||0,rb=cl.rb[i]||0,cart=cl.cart[i]||0;
-  return {ch,rev,apr,fin,rb,cart,tkf:cl.tkf[i]||0,crev:ch?rev/ch:0,capr:rev?apr/rev:0,cfin:apr?fin/apr:0,ticket:fin?rb/fin:0,imp:cart?ch/cart:0};}
+  return {ch,rev,apr,fin,rb,cart,gmv:(cl.gmv&&cl.gmv[i])||0,tkf:cl.tkf[i]||0,crev:ch?rev/ch:0,capr:rev?apr/rev:0,cfin:apr?fin/apr:0,ticket:fin?rb/fin:0,imp:cart?ch/cart:0};}
 const fval=(c,k)=>k==="cfin"?Math.min(c[k],1.0):c[k];
 const lc=(a,b)=>(a>0&&b>0)?Math.log(b/a):((a>0&&b<=0)?-5:null);
 function detail(cl,key,idxs,stage2){
   const V=idxs.map(i=>conv(cl,i));
   if(key==="ch") return "Demanda: "+idxs.map((i,j)=>`${MONTHS[i]} ${Math.round(V[j].ch)}`+(V[j].cart?` (${(V[j].imp*100).toFixed(0)}%)`:"")).join(" → ");
-  if(key==="ticket") return "Ticket médio: "+idxs.map((i,j)=>`${MONTHS[i]} ${brl(V[j].ticket)}`).join(" → ");
+  if(key==="tkf") return "Ticket médio (final.): "+idxs.map((i,j)=>`${MONTHS[i]} ${brl(V[j].tkf)}`).join(" → ");
   const lbl=key==="crev"?stage2:(key==="capr"?"Conv. aprovado":"Conv. finalizado");
   return `${lbl}: `+idxs.map((i,j)=>`${MONTHS[i]} ${(V[j][key]*100).toFixed(0)}%`).join(" → ");
 }
 function analyzeProduct(prod,iA,iB){
   const stage2=prod.stage2; const idxs=[]; for(let i=iA;i<=iB;i++) idxs.push(i);
-  const factors=[["Demanda","ch"],[stage2,"crev"],["Conv. aprovado","capr"],["Conv. finalizado","cfin"],["Ticket médio","ticket"]];
+  const factors=[["Demanda","ch"],[stage2,"crev"],["Conv. aprovado","capr"],["Conv. finalizado","cfin"],["Ticket médio (final.)","tkf"]];
   const clients=prod.clients.map(cl=>{
     const c0=conv(cl,iA), c2=conv(cl,iB);
     const dem_lc=lc(fval(c0,"ch"),fval(c2,"ch")), rev_lc=lc(c0.rb,c2.rb);
@@ -158,7 +158,7 @@ function analyzeProduct(prod,iA,iB){
     for(const [label,key] of factors){
       if(key==="ch"){ if(dem_off) drops.push([label,key,dem_lc]); continue; }
       if(!allow) continue;
-      if(key==="ticket"&&(c0.fin<3||c2.fin<3)) continue;
+      if(key==="tkf"&&(c0.fin<3||c2.fin<3)) continue;
       const l=lc(fval(c0,key),fval(c2,key));
       if(l!==null&&l<=LN_DROP) drops.push([label,key,l]);
     }
@@ -280,12 +280,12 @@ function render(key){
     return `<tr class="${j===0?'fgrp':'fsub'}"><td>${j===0?c.cliente:""}</td><td class="${(i===iA||i===iB)?'hiCol':''}">${L[i]}</td>
       <td class="num">${fmt(f.cart)}</td><td class="num">${fmt(f.ch)}</td><td class="num">${(f.imp*100).toLocaleString("pt-BR",{maximumFractionDigits:1})}%</td>
       <td class="num">${fmt(f.rev)}</td><td class="num">${(f.crev*100).toFixed(0)}%</td><td class="num">${fmt(f.apr)}</td><td class="num">${(f.capr*100).toFixed(0)}%</td>
-      <td class="num">${fmt(f.fin)}</td><td class="num">${(f.cfin*100).toFixed(0)}%</td><td class="num">${brl(f.tkf)}</td><td class="num">${brl(f.ticket)}</td><td class="num" style="font-weight:650">${brl(f.rb)}</td></tr>`;}).join("")).join("");
+      <td class="num">${fmt(f.fin)}</td><td class="num">${(f.cfin*100).toFixed(0)}%</td><td class="num">${brl(f.tkf)}</td><td class="num">${brl(f.gmv)}</td><td class="num" style="font-weight:650">${brl(f.rb)}</td></tr>`;}).join("")).join("");
   const funil=`<div class="card"><details><summary>Funil por cliente — números-chave por mês (${fc.length} clientes) ▾</summary>
-    <p class="hint" style="margin-top:8px">Meses da comparação (${winlab}). Conv. finalizado pode passar de 100% (defasagem). Ticket médio = receita/finalizados.</p>
+    <p class="hint" style="margin-top:8px">Meses da comparação (${winlab}). Conv. finalizado pode passar de 100% (defasagem). Ticket = Tkm prestador finalizado.</p>
     <div class="scroll"><table><thead><tr><th>Cliente</th><th>Mês</th><th class="num">Carteira</th><th class="num">Chamados</th><th class="num">Impacto</th>
       <th class="num">${prod.stage2n}</th><th class="num">Conv.</th><th class="num">Aprov.</th><th class="num">Conv.</th><th class="num">Final.</th><th class="num">Conv.</th>
-      <th class="num">Tkm prest.</th><th class="num">Ticket</th><th class="num">Receita</th></tr></thead><tbody>${frows}</tbody></table></div></details></div>`;
+      <th class="num">Ticket (Tkm prest. final.)</th><th class="num">GMV vend.</th><th class="num">Receita</th></tr></thead><tbody>${frows}</tbody></table></div></details></div>`;
 
   document.getElementById("panel").innerHTML=kpis+visao+charts+onde+funil;
   document.getElementById("chint").textContent=`Comparando ${MLAB[iA]} → ${MLAB[iB]} · ${idxs.length} ${idxs.length>1?'meses':'mês'} na janela.`;
@@ -299,7 +299,7 @@ function cur(){return PRODs[[...document.querySelectorAll(".tab")].findIndex(t=>
 // setup
 document.getElementById("subtitle").textContent="Manutenção e Desocupação · dados até "+MLAB[NM-1];
 document.getElementById("foot").innerHTML=
-  "Funil: Carteira → Chamados <span class='parc'>(Impacto = penetração = chamados/carteira)</span> → Revisados/Realizados (orçamento) → Aprovados (venda) → Finalizados (execução) → Ticket médio (receita/finalizado) → Receita bruta.<br>"+
+  "Funil: Carteira → Chamados <span class='parc'>(Impacto = penetração = chamados/carteira)</span> → Revisados/Realizados (orçamento) → Aprovados (venda) → Finalizados (execução) → Ticket médio finalizado (Tkm prestador finalizado) → Receita bruta.<br>"+
   "'O que está caindo' vem da decomposição da receita pelo funil entre os dois meses escolhidos; um cliente pode ter vários ofensores (toda etapa que caiu ≥~14%). Quando a demanda desaba, as conversões viram ruído e o ofensor é Demanda. "+
   "Conv. finalizado só é destacado quando é o único motivo e a receita caiu (informativo, sem ação).<br>Atualizado em "+(DATA.gerado_em||"—")+".";
 const selAE=document.getElementById("selA"),selBE=document.getElementById("selB");

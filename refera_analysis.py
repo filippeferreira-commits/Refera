@@ -23,10 +23,12 @@ def _norm(s):
 
 PROFILE_MANUT = {"imo":"imobiliaria","mes":"mes","ch":"qtd chamados","cart":"carteira",
     "imp":"impacto prop.","imp_alt":"impacto","rev":"qtd revisados","apr":"qtd aprovados",
-    "fin":"qtd finalizados","tkf":"tkm prestador finalizado (r$)","rb":"receita bruta (r$)"}
+    "fin":"qtd finalizados","tkf":"tkm prestador finalizado (r$)","rb":"receita bruta (r$)",
+    "gmv":"gmv vendido (r$)"}
 PROFILE_DESO = {"imo":"imobiliaria","mes":"mes","ch":"qtd chamados","cart":"carteira",
     "imp":"impacto realizado proporcional","imp_alt":"impacto realizado","rev":"qtd realizados",
-    "apr":"qtd aprovados","fin":"qtd finalizados","tkf":"tkm prestador finalizado","rb":"receita bruta"}
+    "apr":"qtd aprovados","fin":"qtd finalizados","tkf":"tkm prestador finalizado","rb":"receita bruta",
+    "gmv":"gmv vendido"}
 
 def detect(headers):
     hn=[_norm(h) for h in headers]
@@ -62,7 +64,7 @@ def load(path):
             if i is None: return 0.0
             return pctnorm(r[i]) if pct else num(r[i])
         d[imo][ym]=dict(ch=g("ch"),cart=g("cart"),rev=g("rev"),apr=g("apr"),
-                        fin=g("fin"),tkf=g("tkf"),rb=g("rb"))
+                        fin=g("fin"),tkf=g("tkf"),rb=g("rb"),gmv=g("gmv"))
     return d, sorted(months), stage2, stage2n
 
 MESNOME={1:'jan',2:'fev',3:'mar',4:'abr',5:'mai',6:'jun',7:'jul',8:'ago',9:'set',10:'out',11:'nov',12:'dez'}
@@ -87,6 +89,7 @@ def extract(path, ry, rm):
             apr=[round(x) for x in ser(imo,"apr")],
             fin=[round(x) for x in ser(imo,"fin")],
             tkf=[round(x) for x in ser(imo,"tkf")],
+            gmv=[round(x) for x in ser(imo,"gmv")],
             rb=[round(x) for x in rb]))
     clients.sort(key=lambda c:-c["rb"][-1] if c["rb"] else 0)
     return dict(labels=labels, labels_short=labels_short, stage2=stage2, stage2n=stage2n, clients=clients)
