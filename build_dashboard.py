@@ -164,27 +164,36 @@ function analyzeProduct(prod,iA,iB){
       if(l!==null&&l<=LN_DROP) drops.push([label,key,l]);
     }
     if(dem_lc!==null&&dem_lc<=LN_COLL&&drops.some(t=>t[1]==="ch")) drops=drops.filter(t=>t[1]==="ch");
-    let no_action=false;
-    const upstream=drops.filter(t=>["ch","crev","capr"].includes(t[1]));
-    const cfin_in=drops.some(t=>t[1]==="cfin");
-    if(upstream.length===0){
-      if(cfin_in && rev_lc!==null && rev_lc<0){
-        // nada caiu a montante (demanda/orçamento/venda ok) e a finalização escorregou:
-        // DEFASAGEM -> informativo. O ticket finalizado menor é consequência da baixa finalização.
-        drops=drops.filter(t=>t[1]==="cfin"); no_action=true;
-      } else {
-        drops=drops.filter(t=>t[1]!=="cfin"); // finalização ok: mantém o resto (ex.: ticket que caiu de fato)
-      }
+    let no_action=false, seca=false, extIdx=idxs;
+    if(rev_lc!==null && rev_lc<0 && c2.ch===0){
+      // sem chamados no mês de referência: as finalizações vinham de meses anteriores.
+      // sem novas aberturas a receita NÃO se recupera -> a razão é DEMANDA (reativação), não defasagem.
+      drops=[["Demanda","ch",(dem_lc!==null?dem_lc:-5)]]; seca=true;
+      extIdx=[]; for(let i=Math.max(0,iB-3);i<=iB;i++) extIdx.push(i);
     } else {
-      drops=drops.filter(t=>t[1]!=="cfin");    // problema real a montante: conv. finalizado é ruído
-    }
-    if(!drops.length&&rev_lc!==null&&rev_lc<=LN_DROP){
-      let cand=factors.filter(([lb,k])=>k!=="cfin").map(([lb,k])=>[lb,k,lc(fval(c0,k),fval(c2,k))]).filter(t=>t[2]!==null&&t[2]<0);
-      if(cand.length){cand.sort((a,b)=>a[2]-b[2]);drops=[cand[0]];}
+      const upstream=drops.filter(t=>["ch","crev","capr"].includes(t[1]));
+      const cfin_in=drops.some(t=>t[1]==="cfin");
+      if(upstream.length===0){
+        if(cfin_in && rev_lc!==null && rev_lc<0){
+          // nada caiu a montante (demanda/orçamento/venda ok) e a finalização escorregou, MAS ainda há
+          // chamados no mês -> DEFASAGEM (informativo). O ticket finalizado menor é consequência.
+          drops=drops.filter(t=>t[1]==="cfin"); no_action=true;
+        } else {
+          drops=drops.filter(t=>t[1]!=="cfin"); // finalização ok: mantém o resto (ex.: ticket que caiu de fato)
+        }
+      } else {
+        drops=drops.filter(t=>t[1]!=="cfin");    // problema real a montante: conv. finalizado é ruído
+      }
+      if(!drops.length&&rev_lc!==null&&rev_lc<=LN_DROP){
+        let cand=factors.filter(([lb,k])=>k!=="cfin").map(([lb,k])=>[lb,k,lc(fval(c0,k),fval(c2,k))]).filter(t=>t[2]!==null&&t[2]<0);
+        if(cand.length){cand.sort((a,b)=>a[2]-b[2]);drops=[cand[0]];}
+      }
     }
     drops.sort((a,b)=>a[2]-b[2]);
-    const offenders=drops.map(([lb,k])=>({label:lb,detalhe:detail(cl,k,idxs,stage2)}));
-    const recs=[]; drops.forEach(([lb])=>{if(REC[lb]&&!recs.includes(REC[lb]))recs.push(REC[lb]);});
+    const offenders=drops.map(([lb,k])=>({label:lb,detalhe:detail(cl,k,(seca&&k==="ch")?extIdx:idxs,stage2)}));
+    const recs=[];
+    if(seca){ recs.push("• Sem novos chamados no período — as finalizações vinham de meses anteriores, então a receita não se recupera sozinha. Priorizar reativação: por que o cliente parou de abrir chamados?"); }
+    else { drops.forEach(([lb])=>{if(REC[lb]&&!recs.includes(REC[lb]))recs.push(REC[lb]);}); }
     const rbA=cl.rb[iA]||0,rbB=cl.rb[iB]||0,chA=cl.ch[iA]||0,chB=cl.ch[iB]||0;
     const var_rb=rbA?(rbB-rbA)/rbA*100:null, var_ch=chA?(chB-chA)/chA*100:null;
     let scale=0; for(let i=iA;i<=iB;i++) scale=Math.max(scale,cl.rb[i]||0);
